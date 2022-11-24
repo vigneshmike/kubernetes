@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redisauth-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisauth-deployment
+  labels:
+    app: redisauth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisauth
+  template:
+    metadata:
+      labels:
+        app: redisauth
+    spec:
+      containers:
+      - name: redisauth
+        image: redis
+        volumeMounts:
+        - name: redisauth-volume
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redisauth-volume
+        persistentVolumeClaim:
+          claimName: redisauth-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisauth-service
+spec:
+  selector:
+    app: redisauth
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---      
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-configmap
+data:
+  spring_redis_host: redisauth-service
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_username: flw4
+  spring_datasource_url: "jdbc:mysql://mariadb-service:3306/flw4?useSSL=false"
+  totpDomainUrl: "https://client.test.flexwhere.com"
+  validateUrl: "https://web.test.flexwhere.com/login/validatelink"
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-secrets
+type: Opaque
+data:
+  totpAuthPassword: cm5KanBYbjI5QTRDCg==
+  spring_datasource_password: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-deployment
+  labels:
+    app: authservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authservice
+  template:
+    metadata:
+      labels:
+        app: authservice
+    spec:
+      containers:
+      - name: flwauthservice
+        image: docker.flexwhere.com/flw_auth_service:FA25082022
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: auth-configmap
+          - secretRef:
+              name: auth-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  selector:
+    app: authservice
+  type: NodePort  
+  ports:
+    - name: authport
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 32028

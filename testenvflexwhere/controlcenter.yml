@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cc-deployment
+  labels:
+    app: cc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cc
+  template:
+    metadata:
+      labels:
+        app: cc
+    spec:
+      containers:
+      - name: cc
+        image: docker.flexwhere.com/flexwhere_frontend_admin:test
+        ports:
+        - containerPort: 80
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cc-service
+spec:
+  selector:
+    app: cc
+  ports:
+    - name: nginx-port
+      protocol: TCP
+      port: 8088
+      targetPort: 80

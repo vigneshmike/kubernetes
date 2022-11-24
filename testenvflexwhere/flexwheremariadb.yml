@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-secrets
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: OFA0UUw2VjdyZHI2Q3hOV3RlTW0=
+  MYSQL_USER: Zmx3NA==
+  MYSQL_PASSWORD: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+  MYSQL_DATABASE: Zmx3NA==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.4
+        volumeMounts:
+        - name: mariadb-volume
+          mountPath: /var/lib/mysql/
+        ports:
+        - containerPort: 3306
+        envFrom:
+          - secretRef:
+              name: mariadb-secrets
+      volumes:
+      - name: mariadb-volume
+        persistentVolumeClaim:
+          claimName: mariadb-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - name: maraidbport
+      protocol: TCP
+      port: 3306
+      targetPort: 3306

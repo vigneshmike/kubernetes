@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: importservice-configmap
+data:
+  spring_datasource_url: "jdbc:mysql://mariadb-service:3306/flw4?useSSL=false"
+  spring_jpa_hibernate_ddl-auto: update 
+  spring_datasource_username: flw4 
+  spring_datasource_password: c2ORq81VGM7bcUSf456L
+  flexwhereURL: "http://flexwherenginx-service:80/" 
+  sftpUser: 54.170.73.7
+  ftpServiceUrl: "https://dutchview.test.flexwhere.com/api/v1/sftpusers" 
+  searchUrl: "http://10.0.20.231:8081" 
+  sshPassCommand: "/usr/bin/sshpass" 
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver" 
+  bucketName: flexwhere-dutchview-test 
+  bucketKey:  AKIAXUULI2HVDNKXS3G6 
+  bucketPassword: dmxPWFdqOodbjyyMT8zkDkC3efj/6rvEij6FBirv
+  bucketRegion: "ap-south-1" 
+     
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: importservice-deployment
+  labels:
+    app: importservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: importservice
+  template:
+    metadata:
+      labels:
+        app: importservice
+    spec:
+      containers:
+      - name: importservice
+        image: docker.flexwhere.com/flw_import_service:FI03112022
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: importservice-configmap
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: import-service
+spec:
+  selector:
+    app: importservice
+  type: NodePort  
+  ports:
+    - name: importport
+      protocol: TCP
+      port: 8097
+      targetPort: 8080
+      nodePort: 32456

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sftpapi-configmap
+data:
+  sftp_usersConf: "users.conf"
+---  
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sftpapi-deployment
+  labels:
+    app: sftpapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sftpapi
+  template:
+    metadata:
+      labels:
+        app: sftpapi
+    spec:
+      containers:
+      - name: sftpapi
+        image: docker.flexwhere.com/sftp_api_server:26102020
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: sftpapi-configmap  
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode4
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpapi-service
+spec:
+  selector:
+    app: sftpapi
+  type: NodePort
+  ports:
+    - name: nginx-port
+      protocol: TCP
+      port: 8081
+      targetPort: 8080
+      nodePort: 32761

@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redistotp-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redistotp-deployment
+  labels:
+    app: redistotp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redistotp
+  template:
+    metadata:
+      labels:
+        app: redistotp
+    spec:
+      containers:
+      - name: redistotp
+        image: redis
+        volumeMounts:
+        - name: redistotp-volume
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redistotp-volume
+        persistentVolumeClaim:
+          claimName: redistotp-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redistotp-service
+spec:
+  selector:
+    app: redistotp
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---      
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: totp-configmap
+data:
+  spring_redis_host: redistotp-service
+  baseUrl: "https://client.test.flexwhere.com"
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_url: "jdbc:mysql://mariadb-service:3306/flw4?useSSL=false"
+  spring_datasource_username: flw4
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: totp-secrets
+type: Opaque
+data:
+  authPassword: cm5KanBYbjI5QTRDCg==
+  hMacKey: UWt1YXdZZ0cyUk1DTkZ4Ywo=
+  hKey: YWRtaW4xMjMK
+  spring_datasource_password: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: totp-deployment
+  labels:
+    app: totpservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: totpservice
+  template:
+    metadata:
+      labels:
+        app: totpservice
+    spec:
+      containers:
+      - name: generatetotp
+        image: docker.flexwhere.com/generate_totp:GT01082022
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: totp-configmap
+          - secretRef:
+              name: totp-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: totp-service
+spec:
+  selector:
+    app: totpservice
+  ports:
+    - name: totpport
+      protocol: TCP
+      port: 8092
+      targetPort: 8080

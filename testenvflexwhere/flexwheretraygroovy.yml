@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redistray-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redistray-deployment
+  labels:
+    app: redistray
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redistray
+  template:
+    metadata:
+      labels:
+        app: redistray
+    spec:
+      containers:
+      - name: redistray
+        image: redis
+        volumeMounts:
+        - name: redistray-volume
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redistray-volume
+        persistentVolumeClaim:
+          claimName: redistray-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redistray-service
+spec:
+  selector:
+    app: redistray
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flwtraygroovy-configmap
+data:
+  spring_redis_host: redisflw-service
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_url: "jdbc:mysql://mariadb-service:3306/flw4?useSSL=false"
+  spring_datasource_username: flw4
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver"
+  flexwhereURL_TrayAPP: "http://flexwheretray-service:80/"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flwtraygroovy-secrets
+type: Opaque
+data:
+  spring_datasource_password: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flwtraygroovy-deployment
+  labels:
+    app: flwtraygroovy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flwtraygroovy
+  template:
+    metadata:
+      labels:
+        app: flwtraygroovy
+    spec:
+      containers:
+      - name: flwtraygroovy
+        image: docker.flexwhere.com/flw_tray_service:FT08042021
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: flwtraygroovy-configmap
+          - secretRef:
+              name: flwtraygroovy-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flwtraygroovy-service
+spec:
+  selector:
+    app: flwtraygroovy
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 8087
+      targetPort: 8080
+      nodePort: 32760

@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flexwheretrayphp-secrets
+type: Opaque
+data:
+  DBASE_PASSWORD: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+  ACCESS_TOKEN: ZlJzM0tKbjdOQnJAYyZnWnpBcXdzRGE=
+  HMAC_SECRET: aUFuN0pXOUcyU0ZSd0RzakR4SHg2eFNNQlJYNFZxblY=
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flexwheretrayphp-configmap
+data:
+  DBASE_NAME: "flw4"
+  DBASE_USER: "flw4"
+  DBASE_HOSTNAME: "mariadb-service"
+  ANALYTICSURL: "http://10.0.20.231:8081/api/v1"
+  user_searchapi_url: "http://10.0.20.231:8081/api/v1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flexwheretrayphp-deployment
+  labels:
+    app: flexwheretrayphp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flexwheretrayphp
+  template:
+    metadata:
+      labels:
+        app: flexwheretrayphp
+    spec:
+      containers:
+      - name: flexwheretrayphp
+        image: docker.flexwhere.com/fw_trayapp_controller:prod
+        ports:
+        - containerPort: 80
+        env:
+        - name: DBASE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: flexwheretrayphp-configmap
+              key: DBASE_NAME
+        - name: DBASE_USER
+          valueFrom:
+            configMapKeyRef:
+              name: flexwheretrayphp-configmap
+              key: DBASE_USER
+        - name: DBASE_HOSTNAME
+          valueFrom:
+            configMapKeyRef:
+              name: flexwheretrayphp-configmap
+              key: DBASE_HOSTNAME
+        - name: DBASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flexwheretrayphp-secrets
+              key: DBASE_PASSWORD
+        - name: ANALYTICSURL
+          valueFrom:
+            configMapKeyRef:
+              name: flexwheretrayphp-configmap
+              key: ANALYTICSURL
+        - name: ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: flexwheretrayphp-secrets
+              key: ACCESS_TOKEN
+        - name: user_searchapi_url
+          valueFrom:
+            configMapKeyRef:
+              name: flexwheretrayphp-configmap
+              key: user_searchapi_url
+        - name: HMAC_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: flexwheretrayphp-secrets
+              key: HMAC_SECRET
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flexwheretray-service
+spec:
+  selector:
+    app: flexwheretrayphp
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 32765

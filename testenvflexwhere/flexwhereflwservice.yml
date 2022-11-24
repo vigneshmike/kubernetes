@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flwservice-configmap
+data:
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_url: "jdbc:mysql://mariadb-service:3306/flw4?useSSL=false"
+  spring_datasource_username: flw4
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver"
+  spring_redis_host: redisflw-service
+  masterDemoOrgId: "957"
+  flexwhereURL: "http://flexwherenginx-service:80/"
+  analyticsURL: "http://flexwhereconsumer-service:8080"
+  mailChimp.apiBase: "https://us5.api.mailchimp.com/3.0/"
+  flexwhereURL_TrayAPP: "http://flexwheretray-service:80/"
+  adminId: "201231"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flwservice-secrets
+type: Opaque
+data:
+  spring_datasource_password: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+  sharedSecret: NkxlSEhzWWZBQUFBQVBsQzB3c2NiNjExR01WeHlxbjdxMEFJM2lsSg==
+  mailChimp.apiKey: YmEzN2JiMWM5YjdlNzFlNzQwYmZiNDU5YTZhOTE1OTMtdXM1
+  mandrill.apiKey: a3BkSTBfRldOTFc3MUZQeVJ3MTNpZw==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2  
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisflw-deployment
+  labels:
+    app: redisflw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisflw
+  template:
+    metadata:
+      labels:
+        app: redisflw
+    spec:
+      containers:
+      - name: redisflw
+        image: redis
+        volumeMounts:
+        - name: redis-volume
+          mountPath: /data  
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redis-volume
+        persistentVolumeClaim:
+          claimName: redis-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisflw-service
+spec:
+  selector:
+    app: redisflw
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flwservice-deployment
+  labels:
+    app: flwservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flwservice
+  template:
+    metadata:
+      labels:
+        app: flwservice
+    spec:
+      containers:
+      - name: flwservice
+        image: docker.flexwhere.com/flw_service:FW14112022
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: flwservice-configmap
+          - secretRef:
+              name: flwservice-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flwservice-service
+spec:
+  selector:
+    app: flwservice
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 32764

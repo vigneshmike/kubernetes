@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flexwherephp-configmap
+data:
+  database_host: mariadb-service
+  database_user: flw4
+  database_name: flw4
+  database_port: "3306"
+  base_host: india.flexwhere.com
+  mailer_transport: "smtp"
+  mailer_host: "smtp.mandrillapp.com"
+  mailer_port: "587"
+  mailer_user: "app@flexwhere.nl"
+  mailer_encryption: "tls"
+  bucket_name: "flexwhere-dutchview-test"
+  region: "ap-south-1"
+  analytics_url: "https://test-analytics.flexwhere.com/api/v1/analytics/index"
+  analytics_base_url: "https://test-analytics.flexwhere.com"
+  stat_host: "https://test-analytics.flexwhere.com"
+  user_searchapi_url: "http://10.0.20.231:8081/api/v1"
+  flw4_router_url: "https://client.test.flexwhere.com"
+  sftp_host: "54.76.37.70"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flexwherephp-secrets
+type: Opaque
+data:
+  database_password: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+  secret: MjA2ZTNkYjlkMDIyYzc5NDlhZjY0ZDcwZWZmMGVlM2RhZjcyZmM3Mg==
+  mailer_password: Ukd2YloyZE9wRDRiNDlsdzViMnQ4UQ==
+  iam_key: QUtJQVhVVUxJMkhWRE5LWFMzRzY=
+  iam_secret: ZG14UFdGZHFPb2Rianl5TVQ4emtEa0MzZWZqLzZydkVpajZGQmlydg==
+  cosun_ldap_password: V2Vsa29tNjAx
+  jwt_secret_key: U2VjcmV0S2V5RmxleFdoZXJlQDc4OSE=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flexwherephp-deployment
+  labels:
+    app: flexwherephp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flexwherephp
+  template:
+    metadata:
+      labels:
+        app: flexwherephp
+    spec:
+      containers:
+      - name: flexwhere
+        image: docker.flexwhere.com/flw4-php:prod
+        ports:
+        - containerPort: 9000
+        envFrom:
+          - configMapRef:
+              name: flexwherephp-configmap
+          - secretRef:
+              name: flexwherephp-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flexwhere
+spec:
+  selector:
+    app: flexwherephp
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000

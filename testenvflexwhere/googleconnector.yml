@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redisgoogle-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisgoogle-deployment
+  labels:
+    app: redisgoogle
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisgoogle
+  template:
+    metadata:
+      labels:
+        app: redisgoogle
+    spec:
+      containers:
+      - name: redisgoogle
+        image: redis
+        volumeMounts:
+        - name: redisgoogle-volume
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redisgoogle-volume
+        persistentVolumeClaim:
+          claimName: redisgoogle-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisgoogle-service
+spec:
+  selector:
+    app: redisgoogle
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: googleconnector-configmap
+data:
+  spring_redis_host: redisgoogle-service
+  filePath: /opt/file.json
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: googleconnector1-config
+data:
+  file.json: |
+      [
+         {
+           "subDomain": "dutchview",
+           "domainUrl": "https://dutchview.test.flexwhere.com",
+           "userName": "googleconnector",
+           "password": "Welkom01$",
+           "calendars": [
+             {
+               "calendarID": "dutchview.com_3938323732313433333337@resource.calendar.google.com",
+               "roomName": "Deventer-BG-The Forest (12)"
+             },
+             {
+               "calendarID": "dutchview.com_3432343535343834363732@resource.calendar.google.com",
+               "roomName": "Deventer-1e-The City (6)"
+             },
+             {
+               "calendarID": "dutchview.com_3838323338353830363536@resource.calendar.google.com",
+               "roomName": "Deventer-1e-The Beach (10)"
+             },
+             {
+               "calendarID": "c_1886tslsu16uqiggmonpkbvaf9mne@resource.calendar.google.com",
+               "roomName": "Pampa"
+             },
+             {
+               "calendarID": "c_1881mtdt8gdjug5tkurr67jeoeagu@resource.calendar.google.com",
+               "roomName": "Ponna"
+             }  
+           ]
+         }
+      ]
+  
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: googleconnector-deployment
+  labels:
+    app: googleconnector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: googleconnector
+  template:
+    metadata:
+      labels:
+        app: googleconnector
+    spec:
+      containers:
+      - name: googleconnector
+        image: docker.flexwhere.com/flexwhere_google_connector:16082021
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: googleconnector-configmap
+        volumeMounts:
+        - mountPath: /opt/file.json
+          name: google-volume
+          subPath: file.json
+      volumes:
+      - name: google-volume
+        configMap:
+          name: googleconnector1-config      
+      imagePullSecrets:
+      - name: fwregistry-secret        
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: googleconnector-service
+spec:
+  selector:
+    app: googleconnector
+  ports:
+    - name: googleconnectorport
+      protocol: TCP
+      port: 8094
+      targetPort: 8080

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flexwherenginx-deployment
+  labels:
+    app: flexwherenginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flexwherenginx
+  template:
+    metadata:
+      labels:
+        app: flexwherenginx
+    spec:
+      containers:
+      - name: flexwherenginx
+        image: docker.flexwhere.com/flw4:prod
+        ports:
+        - containerPort: 80
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flexwherenginx-service
+spec:
+  selector:
+    app: flexwherenginx
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 32766

@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redisscim-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisscim-deployment
+  labels:
+    app: redisscim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisscim
+  template:
+    metadata:
+      labels:
+        app: redisscim
+    spec:
+      containers:
+      - name: redisscim
+        image: redis
+        volumeMounts:
+        - name: redisscim-volume
+          mountPath: /data
+        ports:
+        - containerPort: 6379
+      volumes:
+      - name: redisscim-volume
+        persistentVolumeClaim:
+          claimName: redisscim-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisscim-service
+spec:
+  selector:
+    app: redisscim
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scimservice-configmap
+data:
+  spring_redis_host: redisscim-service
+  baseStoreDirectory: /data
+  domain: "test.flexwhere.com"
+  server_port: "8080"
+  ipWhiteList: 81.28.93.122,49.206.255.19,196.240.60.59,92.119.179.170
+---  
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scim2-config
+data: 
+  accounts.json: |
+    []
+  
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scimservice-deployment
+  labels:
+    app: scimservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scimservice
+  template:
+    metadata:
+      labels:
+        app: scimservice
+    spec:
+      containers:
+      - name: scimservice
+        image: docker.flexwhere.com/scim_server:test-20220610
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: scimservice-configmap
+        volumeMounts:
+        - mountPath: /data/accounts.json
+          name: scim-config-volume
+          subPath: accounts.json
+      volumes:
+      - name: scim-config-volume
+        configMap:
+          name: scim2-config    
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scim-service
+spec:
+  selector:
+    app: scimservice
+  ports:
+    - protocol: TCP
+      port: 8091
+      targetPort: 8080

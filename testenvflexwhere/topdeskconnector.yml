@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flexwhereconnector-configmap
+data:
+  topdesk_shareServerInternalUrl: "admin@13.233.93.62:"
+  topdesk_shareServerPort: "2222"
+  timeUnit: "1" 
+  userDB: /opt/flexwhere/connector/userDb/userDB.json
+  filePath: /opt/flexwhere/connector/userDb/test.json 
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flexwhereconnector-deployment
+  labels:
+    app: flexwhereconnector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flexwhereconnector
+  template:
+    metadata:
+      labels:
+        app: flexwhereconnector
+    spec:
+      containers:
+      - name: flexwhereconnector
+        image: docker.flexwhere.com/flexwhere_connector:FC23082022
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: flexwhereconnector-configmap
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flexwhereconnector-service
+spec:
+  selector:
+    app: flexwhereconnector
+  ports:
+    - protocol: TCP
+      port: 8091
+      targetPort: 8080

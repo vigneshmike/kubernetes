@@ -1,0 +1,268 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-stat
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: OFA0UUw2VjdyZHI2Q3hOV3RlTW0=
+  MYSQL_USER: Zmx3NA==
+  MYSQL_PASSWORD: YzJPUnE4MVZHTTdiY1VTZjQ1Nkw=
+  MYSQL_DATABASE: Zmx3NA==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadbstat-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+   
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadbstat-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadbstat
+  template:
+    metadata:
+      labels:
+        app: mariadbstat
+    spec:
+      containers:
+      - name: mariadbstat
+        image: mariadb:10.4
+        volumeMounts:
+        - name: mariadbstat-volume
+          mountPath: /var/lib/mysql/
+        ports:
+        - containerPort: 3306
+        envFrom:
+          - secretRef:
+              name: mariadb-stat
+      volumes:
+      - name: mariadbstat-volume
+        persistentVolumeClaim:
+          claimName: mariadbstat-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadbstat-service
+spec:
+  selector:
+    app: mariadbstat
+  ports:
+    - name: maraidbstatport
+      protocol: TCP
+      port: 3306
+      targetPort: 3306
+
+
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch2-service
+spec:
+  selector:
+    app: elasticsearch2
+  type: LoadBalancer  
+  ports:
+    - port: 9200
+      name: rest
+    - port: 9300
+      name: inter-node
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch2-configmap
+data:
+  bootstrap_memory_lock: "true"
+  xpack_security.enabled: "false"
+  discovery_type: "single-node"
+  network_publish_host: "0.0.0.0"
+  cluster_name: "elasticsearch"
+  ES_JAVA_OPTS: "-Xms8g -Xmx8g"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch2-pvc-volume
+spec:
+  resources:
+   requests:
+     storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch2-deployment
+  labels:
+    app: elasticsearch2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch2
+  template:
+    metadata:
+      labels:
+        app: elasticsearch2
+    spec:
+      containers:
+      - name: elasticsearch2
+        image: elasticsearch:5.6.10
+        envFrom:
+          - configMapRef:
+              name: elasticsearch2-configmap
+        volumeMounts:
+        - name: elasticsearch2-volume
+          mountPath: /usr/share/elasticsearch/data
+        ports:
+        - containerPort: 9200
+          name: rest
+          protocol: TCP
+        - containerPort: 9300
+          name: inter-node
+          protocol: TCP
+      volumes:
+      - name: elasticsearch2-volume
+        persistentVolumeClaim:
+          claimName: elasticsearch2-pvc-volume
+      nodeSelector:
+        nodeLabelname: fwtestnode3
+ 
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emmiter-configmap
+data:
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_url: "jdbc:mysql://mariadbstat-service:3306/flw4?useSSL=false" 
+  spring_datasource_username: "flw4"
+  spring_datasource_password: c2ORq81VGM7bcUSf456L
+  spring_data_elasticsearch_cluster-nodes: "elasticsearch2-service:9300"
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver" 
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emitter-deployment
+  labels:
+    app: emitter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: emitter
+  template:
+    metadata:
+      labels:
+        app: emitter
+    spec:
+      containers:
+      - name: emitter
+        image: docker.flexwhere.com/flw_stats_emitter:FE12102022
+        envFrom:
+          - configMapRef:
+              name: emmiter-configmap
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: fwregistry-secret  
+      nodeSelector:
+         nodeLabelname: fwtestnode3  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emitter-service
+spec:
+  selector:
+    app: emitter
+  type: NodePort  
+  ports:
+    - protocol: TCP
+      port: 8085
+      targetPort: 8080
+      nodePort: 32677
+  
+
+
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consumer-configmap
+data:
+  spring_jpa_hibernate_ddl-auto: update
+  spring_datasource_url: "jdbc:mysql://mariadbstat-service:3306/flw4?useSSL=false"
+  spring_datasource_username: "flw4"
+  spring_datasource_password: c2ORq81VGM7bcUSf456L
+  spring_data_elasticsearch_cluster-nodes: "elasticsearch2-service:9300"
+  spring_datasource_driver-class-name: "com.mysql.cj.jdbc.Driver"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-deployment
+  labels:
+    app: consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+      - name: consumer
+        image: docker.flexwhere.com/flw_stats_consumer:FC26092022
+        envFrom:
+          - configMapRef:
+              name: consumer-configmap
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: fwregistry-secret  
+      nodeSelector:
+        nodeLabelname: fwtestnode3  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consumer-service
+spec:
+  selector:
+    app: consumer
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8080
+      nodePort: 32678
+

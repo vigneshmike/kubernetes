@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mailer-configmap
+data:
+  mailTo: "harsha@dutchview.com"
+  spring_mail_host: "smtp.mandrillapp.com"
+  spring_mail_port: "587"
+  isSendEmail: "false"
+  spring_mail_username: "app@flexwhere.nl"
+  fromEmail: "info@flexwhere.nl"
+  emailWhiteList: dutchview.in,dutchview.com,dutchview.co.uk,dutchview.de,flexwhere.de,flexwhere.com,flexwhere.co.uk.flexwhere.nl,edcontrols.com,controls.de,edcontrols.nl,edcontrols.co.uk,jox.app
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mailer-secrets
+type: Opaque
+data:
+  spring_mail_password: Ukd2YloyZE9wRDRiNDlsdzViMnQ4UQo=
+  flexwhereJWTSecret: U2VjcmV0S2V5RmxleFdoZXJlQDc4OSEK
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailer-deployment
+  labels:
+    app: mailerservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailerservice
+  template:
+    metadata:
+      labels:
+        app: mailerservice
+    spec:
+      containers:
+      - name: mailer
+        image: docker.flexwhere.com/flw_mailer:test-20220909
+        ports:
+        - containerPort: 8080
+        envFrom:
+          - configMapRef:
+              name: mailer-configmap
+          - secretRef:
+              name: mailer-secrets
+      imagePullSecrets:
+      - name: fwregistry-secret
+      nodeSelector:
+        nodeLabelname: fwtestnode2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailer-service
+spec:
+  selector:
+    app: mailerservice
+  type:  NodePort
+  ports:
+    - name: mailerport
+      protocol: TCP
+      port: 8093
+      targetPort: 8080
+      nodePort: 30756 
